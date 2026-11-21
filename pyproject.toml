@@ -45,6 +45,9 @@ gui = [
 yaml = [
     "pyyaml"
 ]
+qr = [
+    "qrcode"
+]
 
 [project.urls]
 Homepage = "https://github.com/amchii/tg-signer"

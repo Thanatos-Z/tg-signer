@@ -10,6 +10,7 @@ class SignRecordGroup:
     task_name: str
     user_id: Optional[str]
     records: list[tuple[str, str]]
+    statuses: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -20,6 +21,7 @@ class RecentSignRecord:
     signed_at: str
     account: Optional[str]
     source: str
+    status: str = "unknown"
 
 
 @dataclass
@@ -32,7 +34,7 @@ class MigrationSummary:
 
 class SignRecordStore:
     DB_FILENAME = "data.sqlite3"
-    SCHEMA_VERSION = 1
+    SCHEMA_VERSION = 2
 
     def __init__(self, workdir: str | Path):
         self.workdir = Path(workdir)
@@ -58,6 +60,7 @@ class SignRecordStore:
         # rewriting the bootstrap logic.
         migrations = {
             1: self._migrate_to_v1,
+            2: self._migrate_to_v2,
         }
         for target_version in range(version + 1, self.SCHEMA_VERSION + 1):
             migration = migrations.get(target_version)
@@ -96,6 +99,12 @@ class SignRecordStore:
             """
         )
 
+    @staticmethod
+    def _migrate_to_v2(conn: sqlite3.Connection) -> None:
+        conn.execute(
+            "ALTER TABLE sign_records ADD COLUMN status TEXT NOT NULL DEFAULT 'unknown'"
+        )
+
     def _upsert_records(
         self,
         conn: sqlite3.Connection,
@@ -105,6 +114,7 @@ class SignRecordStore:
         *,
         account: str | None = None,
         source: str = "runtime",
+        status: str = "unknown",
     ) -> int:
         rows = [
             (
@@ -114,6 +124,7 @@ class SignRecordStore:
                 signed_at,
                 account,
                 source,
+                status,
             )
             for sign_date, signed_at in items
         ]
@@ -127,12 +138,14 @@ class SignRecordStore:
                 sign_date,
                 signed_at,
                 account,
-                source
-            ) VALUES (?, ?, ?, ?, ?, ?)
+                source,
+                status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(task_name, user_id, sign_date) DO UPDATE SET
                 signed_at = excluded.signed_at,
                 account = excluded.account,
-                source = excluded.source
+                source = excluded.source,
+                status = excluded.status
             """,
             rows,
         )
@@ -147,6 +160,7 @@ class SignRecordStore:
         *,
         account: str | None = None,
         source: str = "runtime",
+        status: str = "unknown",
     ) -> None:
         with self._connect() as conn:
             self._upsert_records(
@@ -156,6 +170,7 @@ class SignRecordStore:
                 [(sign_date, signed_at)],
                 account=account,
                 source=source,
+                status=status,
             )
             conn.commit()
 
@@ -189,19 +204,26 @@ class SignRecordStore:
         with self._connect() as conn:
             rows = conn.execute(
                 """
-                SELECT task_name, user_id, sign_date, signed_at
+                SELECT task_name, user_id, sign_date, signed_at, status
                 FROM sign_records
                 ORDER BY task_name ASC, user_id ASC, sign_date DESC
                 """
             ).fetchall()
 
         grouped: dict[tuple[str, str], list[tuple[str, str]]] = {}
+        statuses: dict[tuple[str, str], dict[str, str]] = {}
         for row in rows:
             key = (row["task_name"], row["user_id"])
             grouped.setdefault(key, []).append((row["sign_date"], row["signed_at"]))
+            statuses.setdefault(key, {})[row["sign_date"]] = row["status"]
 
         return [
-            SignRecordGroup(task_name=task_name, user_id=user_id, records=records)
+            SignRecordGroup(
+                task_name=task_name,
+                user_id=user_id,
+                records=records,
+                statuses=statuses.get((task_name, user_id), {}),
+            )
             for (task_name, user_id), records in grouped.items()
         ]
 
@@ -213,7 +235,7 @@ class SignRecordStore:
         user_id: str | None = None,
     ) -> list[RecentSignRecord]:
         query = [
-            "SELECT task_name, user_id, sign_date, signed_at, account, source",
+            "SELECT task_name, user_id, sign_date, signed_at, account, source, status",
             "FROM sign_records",
         ]
         conditions = []
@@ -241,6 +263,7 @@ class SignRecordStore:
                 signed_at=row["signed_at"],
                 account=row["account"],
                 source=row["source"],
+                status=row["status"],
             )
             for row in rows
         ]

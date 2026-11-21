@@ -20,6 +20,8 @@ This file guides agents/developers collaborating in the `tg-signer` repository. 
   - Optional WebUI: `tg_signer/webui/`
 - For new automation-related features, prefer implementing them in the `automation` subsystem first. `monitor` is still kept and exposed through the CLI/WebUI, but it is no longer the preferred place for new capabilities.
 - The primary storage for check-in records is now SQLite: `<workdir>/data.sqlite3`. `sign_record.json` is only kept for compatibility reads/migration and is no longer the primary write target.
+- Check-in records include a `status` column (SQLite schema v2): `success`, `partial`, `failed`, or `unknown`. `unknown` is used for legacy JSON imports and records created before schema v2.
+- The current WebUI manages signer/monitor configs and check-in records, and provides a signer task overview; it is not an automation config editor.
 - Automation configs support `config.json`, `config.yaml`, and `config.yml`. Resolution order is JSON first, then YAML. YAML requires `pyyaml`.
 - LLM configuration supports two sources:
   - Environment variables: `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`

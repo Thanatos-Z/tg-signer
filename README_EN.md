@@ -26,6 +26,12 @@ Or install the performance extras:
 pip install "tg-signer[speedup]"
 ```
 
+To enable QR code login:
+
+```sh
+pip install "tg-signer[qr]"
+```
+
 #### WebUI
 
 `tg-signer` also ships with a WebUI. Install it with:
@@ -33,6 +39,10 @@ pip install "tg-signer[speedup]"
 ```sh
 pip install "tg-signer[gui]"
 ```
+
+The WebUI provides a signer task overview (target chats, schedule, latest
+check-in record), signer/monitor configuration editing, sign record lookup with
+success/failure status, and log viewing.
 
 ![webgui](./assets/webui.jpeg)
 
@@ -92,7 +102,7 @@ Commands:
   list-members            List chat members (groups or channels; channels require
                           admin permissions)
   list-folders            List regular Telegram chat folders
-  list-sign-records       List the latest N check-in records
+  list-sign-records       List the latest N check-in records (with status)
   list-topics             List group topic IDs (`message_thread_id`)
   list-schedule-messages  Show configured scheduled messages
   llm-config              Configure the LLM API
@@ -124,6 +134,7 @@ tg-signer run my_sign  # Run the 'my_sign' task directly, without prompting
 tg-signer run-once my_sign  # Run the 'my_sign' task once directly
 tg-signer list-folders  # List regular Telegram folders and their explicit chat counts
 tg-signer login --from-folder Sign  # Log in and discover chats from the Sign folder
+tg-signer login --qr  # Log in with a QR code
 tg-signer run --from-folder Sign my_sign  # Discover chats from Sign before running the task
 tg-signer list-sign-records linuxdo -n 5  # View the latest 5 check-in records for task linuxdo
 tg-signer migrate-sign-records  # Migrate check-in records under .signer/signs to SQLite
@@ -167,6 +178,18 @@ Signer `chat_id` also supports integer IDs and `@`-prefixed usernames such as
 
 For forum-style groups, the login output also prints each topic's
 `message_thread_id`, which can be used directly with `--message-thread-id`.
+
+To log in without entering a phone number and verification code, install
+`tg-signer[qr]` and use QR code login:
+
+```sh
+tg-signer login --qr
+```
+
+The terminal displays a QR code that refreshes roughly every 30 seconds. Scan it
+with Telegram on your phone via "Settings → Privacy and Security → Devices →
+Scan QR Code". QR login also loads your recent chats and supports
+`--from-folder`.
 
 If a target chat is not in the recent list, create a regular Telegram folder and
 manually add the target chats. You can then load it by name or ID:
@@ -511,3 +534,14 @@ After migrating to SQLite, new check-in records are written only to
 `data.sqlite3`, but old `sign_record.json` files can still be read. If legacy
 JSON is detected while running a task, the program prints a notice and tries to
 import that task's historical records into SQLite automatically.
+
+Each check-in record also has a `status` field:
+
+- `success`: all target chats completed successfully
+- `partial`: some target chats failed
+- `failed`: all target chats failed
+- `unknown`: historical records from before the migration or imported from legacy JSON
+
+The status is shown by `list-sign-records` and on the WebUI "签到记录" page.
+It reflects Telegram send/action-flow errors only; bot replies such as "already
+checked in today" still count as a successful send.

@@ -29,6 +29,15 @@ class DummyWorker:
             }
         )
 
+    async def login_with_qr(self, num_of_dialogs, folder=None):
+        self.calls.append(
+            {
+                "method": "login_with_qr",
+                "num_of_dialogs": num_of_dialogs,
+                "folder": folder,
+            }
+        )
+
     async def run(self, num_of_dialogs, folder=None):
         self.calls.append(
             {
@@ -91,6 +100,55 @@ def test_signer_commands_forward_folder(monkeypatch, runner, args, method):
     assert result.exit_code == 0, result.output
     assert worker.calls[0]["method"] == method
     assert worker.calls[0]["folder"] == "Sign"
+
+
+def test_login_with_qr_uses_qr_login(monkeypatch, runner):
+    worker = DummyWorker()
+    monkeypatch.setattr(signer_cli, "get_signer", lambda *_args, **_kwargs: worker)
+
+    result = runner.invoke(
+        signer_cli.tg_signer,
+        ["login", "--from-folder", "Sign", "--qr"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert worker.calls == [
+        {
+            "method": "login_with_qr",
+            "num_of_dialogs": 50,
+            "folder": "Sign",
+        }
+    ]
+
+
+def test_login_with_qr_reports_missing_dependency(monkeypatch, runner):
+    class ErrorWorker(DummyWorker):
+        async def login_with_qr(self, num_of_dialogs, folder=None):
+            del num_of_dialogs, folder
+            raise ImportError("qrcode is not installed")
+
+    worker = ErrorWorker()
+    monkeypatch.setattr(signer_cli, "get_signer", lambda *_args, **_kwargs: worker)
+
+    result = runner.invoke(signer_cli.tg_signer, ["login", "--qr"])
+
+    assert result.exit_code == 1
+    assert "Error: qrcode is not installed" in result.output
+
+
+def test_login_with_qr_reports_non_tty(monkeypatch, runner):
+    class ErrorWorker(DummyWorker):
+        async def login_with_qr(self, num_of_dialogs, folder=None):
+            del num_of_dialogs, folder
+            raise OSError("Not a tty")
+
+    worker = ErrorWorker()
+    monkeypatch.setattr(signer_cli, "get_signer", lambda *_args, **_kwargs: worker)
+
+    result = runner.invoke(signer_cli.tg_signer, ["login", "--qr"])
+
+    assert result.exit_code == 1
+    assert "Error: 扫码登录需要在交互式终端中运行" in result.output
 
 
 @pytest.mark.parametrize(

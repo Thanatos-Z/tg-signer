@@ -1,7 +1,7 @@
 import json
 import os
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Literal, Optional, Tuple
 
@@ -43,6 +43,7 @@ class SignRecord:
     user_id: Optional[str]
     records: List[Tuple[str, str]]
     path: Path
+    statuses: Dict[str, str] = field(default_factory=dict)
 
 
 def get_workdir(workdir: Optional[Path | str] = None) -> Path:
@@ -194,6 +195,7 @@ def load_sign_records(workdir: Optional[Path | str] = None) -> List[SignRecord]:
                     user_id=group.user_id,
                     records=group.records,
                     path=store.db_path,
+                    statuses=group.statuses,
                 )
             )
 

@@ -99,6 +99,21 @@ def setup_login_test(monkeypatch, core, dialogs):
     return collect_outputs(monkeypatch, core)
 
 
+@pytest.mark.parametrize(
+    ("total", "failed", "expected"),
+    [
+        (2, 0, "success"),
+        (2, 1, "partial"),
+        (2, 2, "failed"),
+        (0, 0, "success"),
+    ],
+)
+def test_derive_sign_status(total, failed, expected):
+    from tg_signer.core import _derive_sign_status
+
+    assert _derive_sign_status(total, failed) == expected
+
+
 def test_get_client_caching(tmp_path):
     """get_client should return the same instance for the same key and different
     instances for different keys.
@@ -366,6 +381,37 @@ async def test_login_bootstrap_is_shared_between_concurrent_workers(
 
 
 @pytest.mark.asyncio
+async def test_login_with_qr_starts_client_in_qr_mode(monkeypatch, signer_factory):
+    import tg_signer.core as core
+
+    start_calls = []
+
+    async def fake_start(self, use_qr=False):
+        start_calls.append(use_qr)
+        await asyncio.sleep(0)
+
+    patch_client_methods(monkeypatch, core, start=fake_start)
+    monkeypatch.setattr(core.importlib.util, "find_spec", lambda name: object())
+
+    signer = signer_factory()
+    await signer.login_with_qr(num_of_dialogs=20, print_chat=False)
+
+    assert start_calls[0] is True
+    assert start_calls[-1] is False
+
+
+@pytest.mark.asyncio
+async def test_login_with_qr_requires_qrcode(monkeypatch, signer_factory):
+    import tg_signer.core as core
+
+    monkeypatch.setattr(core.importlib.util, "find_spec", lambda name: None)
+
+    signer = signer_factory()
+    with pytest.raises(ImportError, match=r"tg-signer\[qr\]"):
+        await signer.login_with_qr()
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("folder_selector", ["Sign", "7"])
 async def test_login_loads_explicit_folder_chats(
     monkeypatch, signer_factory, folder_selector
@@ -517,10 +563,13 @@ def test_user_signer_persist_sign_record_writes_sqlite_only_by_default(signer_fa
         sign_record,
         "2026-03-17",
         "2026-03-17T06:00:00+08:00",
+        status="success",
     )
 
     assert sign_record == {"2026-03-17": "2026-03-17T06:00:00+08:00"}
     assert signer.sign_record_store.load_records("linuxdo", "123456") == sign_record
+    groups = signer.sign_record_store.list_record_groups()
+    assert groups[0].statuses == {"2026-03-17": "success"}
     assert not signer.sign_record_file.exists()
 
 
@@ -989,12 +1038,16 @@ async def test_wait_for_skips_consumed_message_placeholders(signer_factory):
     assert signer.context.chat_messages[route_key][100] is None
 
 
+@pytest.mark.parametrize(
+    "answer", ["8", '"8"', "'8'", "“8”", "‘8’", "`8`", '  " 8 "  ']
+)
 @pytest.mark.asyncio
 async def test_reply_by_calculation_problem_clicks_caption_inline_answer(
     signer_factory,
+    answer,
 ):
     signer = signer_factory()
-    ai_tools = SimpleNamespace(calculate_problem=AsyncMock(return_value="8"))
+    ai_tools = SimpleNamespace(calculate_problem=AsyncMock(return_value=answer))
     signer.get_ai_tools = lambda: ai_tools
     signer.request_callback_answer = AsyncMock(return_value=None)
     signer.send_message = AsyncMock(return_value=None)
@@ -1032,6 +1085,56 @@ async def test_reply_by_calculation_problem_clicks_caption_inline_answer(
         99,
         "answer:8",
     )
+    signer.send_message.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("answer", "options", "expected"),
+    [
+        ('"28"', ["26", "31", "28", "27"], "28"),
+        ('"28"', ["28", '"28"'], '"28"'),
+        ('"99"', ["26", "31", "28", "27"], None),
+        ('"28', ["26", "31", "28", "27"], None),
+        ("答案是28", ["26", "31", "28", "27"], None),
+    ],
+)
+async def test_reply_by_calculation_problem_matches_quoted_answer(
+    signer_factory, answer, options, expected
+):
+    signer = signer_factory()
+    signer.get_ai_tools = lambda: SimpleNamespace(
+        calculate_problem=AsyncMock(return_value=answer)
+    )
+    signer.request_callback_answer = AsyncMock()
+    signer.send_message = AsyncMock()
+    message = SimpleNamespace(
+        id=99,
+        text="请在60秒内点击正确答案：7 * 4 = ?",
+        chat=SimpleNamespace(id=123),
+        reply_markup=InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton(text, callback_data=f"answer:{text}")
+                    for text in row
+                ]
+                for row in [options[:2], options[2:]]
+                if row
+            ]
+        ),
+    )
+
+    ok = await signer._reply_by_calculation_problem(
+        ReplyByCalculationProblemAction(), message
+    )
+
+    assert ok is (expected is not None)
+    if expected is None:
+        signer.request_callback_answer.assert_not_awaited()
+    else:
+        signer.request_callback_answer.assert_awaited_once_with(
+            signer.app, 123, 99, f"answer:{expected}"
+        )
     signer.send_message.assert_not_awaited()
 
 

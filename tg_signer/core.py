@@ -1,4 +1,5 @@
 import asyncio
+import importlib.util
 import json
 import logging
 import os
@@ -228,6 +229,14 @@ _API_MAX_FLOODWAIT_RETRIES = 2
 
 RouteKey = tuple[ChatId, Optional[int]]
 get_timezone = _get_timezone
+
+
+def _derive_sign_status(total: int, failed: int) -> str:
+    if failed == 0:
+        return "success"
+    if failed >= total:
+        return "failed"
+    return "partial"
 
 
 class Client(SafeGetForumTopics, BaseClient):
@@ -652,6 +661,28 @@ class BaseUserWorker(Generic[ConfigT]):
             else:
                 self.log("检测到同账号已完成登录初始化，复用已有会话信息")
             self.set_me(me)
+
+    async def login_with_qr(
+        self,
+        num_of_dialogs=20,
+        print_chat=True,
+        folder: Optional[str] = None,
+    ):
+        if importlib.util.find_spec("qrcode") is None:
+            raise ImportError(
+                '扫码登录需要 qrcode 依赖，请先安装: pip install "tg-signer[qr]"'
+            )
+        self.log("开始扫码登录...")
+        try:
+            await self.app.start(use_qr=True)
+        except ConnectionError:
+            # 已连接时复用当前会话，后续由 login() 完成初始化。
+            pass
+        return await self.login(
+            num_of_dialogs=num_of_dialogs,
+            print_chat=print_chat,
+            folder=folder,
+        )
 
     async def logout(self):
         self.log("开始登出...")
@@ -1089,7 +1120,11 @@ class UserSigner(BaseUserWorker[SignConfigV3]):
         return store.load_records(self.task_name, user_id)
 
     def persist_sign_record(
-        self, sign_record: dict[str, str], sign_date: str, signed_at: str
+        self,
+        sign_record: dict[str, str],
+        sign_date: str,
+        signed_at: str,
+        status: str = "unknown",
     ) -> None:
         sign_record[sign_date] = signed_at
         self.sign_record_store.upsert_record(
@@ -1098,6 +1133,7 @@ class UserSigner(BaseUserWorker[SignConfigV3]):
             sign_date,
             signed_at,
             account=self._account,
+            status=status,
         )
 
     async def sign_a_chat(
@@ -1166,6 +1202,7 @@ class UserSigner(BaseUserWorker[SignConfigV3]):
         chat_ids = [c.chat_id for c in config.chats]
 
         async def sign_once():
+            failed = 0
             for chat in config.chats:
                 route_key = None
                 try:
@@ -1173,6 +1210,7 @@ class UserSigner(BaseUserWorker[SignConfigV3]):
                     self.context.sign_chats[route_key].append(chat)
                     await self.sign_a_chat(chat)
                 except errors.RPCError as _e:
+                    failed += 1
                     self.log(f"签到失败: {_e} \nchat: \n{chat}")
                     logger.warning(_e, exc_info=True)
                     continue
@@ -1180,7 +1218,14 @@ class UserSigner(BaseUserWorker[SignConfigV3]):
                 if route_key is not None:
                     self.context.chat_messages[route_key].clear()
                 await asyncio.sleep(config.sign_interval)
-            self.persist_sign_record(sign_record, str(now.date()), now.isoformat())
+            total = len(config.chats)
+            status = _derive_sign_status(total, failed)
+            self.persist_sign_record(
+                sign_record,
+                str(now.date()),
+                now.isoformat(),
+                status=status,
+            )
 
         def need_sign(last_date_str):
             if force_rerun:
@@ -1348,7 +1393,24 @@ class UserSigner(BaseUserWorker[SignConfigV3]):
             answer = answer.strip()
             self.log(f"回答为: {answer}")
             if option_to_btn:
-                target_btn = option_to_btn.get(_normalize_option_text(answer))
+                normalized_answer = _normalize_option_text(answer)
+                target_btn = option_to_btn.get(normalized_answer)
+                if not target_btn:
+                    # 保留原样匹配的优先级，兼容模型为答案添加成对引号。
+                    for opening, closing in [
+                        ('"', '"'),
+                        ("'", "'"),
+                        ("“", "”"),
+                        ("‘", "’"),
+                        ("`", "`"),
+                    ]:
+                        if (
+                            len(normalized_answer) >= 2
+                            and normalized_answer.startswith(opening)
+                            and normalized_answer.endswith(closing)
+                        ):
+                            target_btn = option_to_btn.get(normalized_answer[1:-1])
+                            break
                 if not target_btn:
                     self.log("未找到匹配的按钮", level="WARNING")
                     return False

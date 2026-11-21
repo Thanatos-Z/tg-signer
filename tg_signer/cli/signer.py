@@ -251,7 +251,7 @@ def list_sign_records(obj, task_name: str | None, limit: int, user_id: str | Non
         return
     for record in records:
         click.echo(
-            f"{record.signed_at} | task={record.task_name} | user={record.user_id} | date={record.sign_date} | source={record.source}"
+            f"{record.signed_at} | task={record.task_name} | user={record.user_id} | date={record.sign_date} | source={record.source} | status={record.status}"
         )
 
 
@@ -265,9 +265,25 @@ def list_sign_records(obj, task_name: str | None, limit: int, user_id: str | Non
     help="未指定 --from-folder 时获取最近N个对话",
 )
 @from_folder_option
+@click.option(
+    "--qr",
+    "use_qr",
+    is_flag=True,
+    help="使用二维码登录（需安装 tg-signer[qr]），在手机 Telegram 中扫码授权",
+)
 @click.pass_obj
-def login(obj, num_of_dialogs, folder):
+def login(obj, num_of_dialogs, folder, use_qr):
     signer = get_signer(None, obj)
+    if use_qr:
+        try:
+            run_worker(signer, signer.login_with_qr(num_of_dialogs, folder=folder))
+        except ImportError as exc:
+            raise click.ClickException(str(exc)) from exc
+        except OSError as exc:
+            if "Not a tty" in str(exc):
+                raise click.ClickException("扫码登录需要在交互式终端中运行") from exc
+            raise
+        return
     run_worker(signer, signer.login(num_of_dialogs, folder=folder))
 
 

@@ -1,5 +1,6 @@
 import json
 import os
+from datetime import datetime
 from pathlib import Path
 from typing import Callable, Dict
 
@@ -86,8 +87,142 @@ class UIState:
 state = UIState()
 
 
+THEME_CSS = """
+:root {
+  --tg-bg: #020617;
+  --tg-surface: #0E1223;
+  --tg-border: #334155;
+  --tg-fg: #F8FAFC;
+  --tg-muted: #94A3B8;
+  --tg-accent: #16A34A;
+  --tg-ring: #22C55E;
+}
+body.body--dark {
+  background:
+    radial-gradient(1200px 600px at 15% -10%, rgba(22, 163, 74, .14), transparent 60%),
+    radial-gradient(900px 500px at 100% 0%, rgba(56, 189, 248, .08), transparent 55%),
+    var(--tg-bg);
+  color: var(--tg-fg);
+  font-family: 'Fira Sans', system-ui, -apple-system, sans-serif;
+}
+.nicegui-content { max-width: 1240px; margin: 0 auto; padding: 28px 20px 56px; }
+body.body--dark .q-card {
+  background: rgba(14, 18, 35, .88);
+  border: 1px solid rgba(51, 65, 85, .75);
+  border-radius: 14px;
+  box-shadow: 0 18px 40px rgba(2, 6, 23, .45);
+  backdrop-filter: blur(8px);
+}
+body.body--dark .q-card > .q-card__section { padding: 18px; }
+h1, h2, h3, h4, h5, h6 { font-family: 'Fira Code', ui-monospace, monospace; letter-spacing: -.01em; }
+.font-mono, code, pre { font-family: 'Fira Code', ui-monospace, monospace; }
+body.body--dark .text-gray-500,
+body.body--dark .text-gray-600 { color: var(--tg-muted) !important; }
+body.body--dark .text-gray-800 { color: #CBD5E1 !important; }
+body.body--dark .text-red-700 { color: #F87171 !important; }
+body.body--dark .text-amber-700 { color: #FBBF24 !important; }
+body.body--dark .text-blue-700 { color: #60A5FA !important; }
+body.body--dark .bg-gray-50 { background: #0A0F1E !important; }
+body.body--dark .border-gray-200 { border-color: var(--tg-border) !important; }
+body.body--dark .jse-theme-dark { border: 1px solid var(--tg-border); }
+body.body--dark .q-tab {
+  color: var(--tg-muted);
+  min-height: 44px;
+  font-weight: 500;
+  letter-spacing: .02em;
+}
+body.body--dark .q-tab--active { color: var(--tg-fg); }
+body.body--dark .q-tab__indicator {
+  background: var(--tg-accent) !important;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+}
+body.body--dark .q-btn {
+  border-radius: 10px;
+  font-weight: 600;
+  letter-spacing: .01em;
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+body.body--dark .q-btn:hover { transform: translateY(-1px); }
+body.body--dark .q-field--outlined .q-field__control {
+  background: rgba(15, 23, 42, .55);
+  border-radius: 10px;
+}
+body.body--dark .q-field--outlined .q-field__control:before {
+  border-color: rgba(51, 65, 85, .9);
+}
+body.body--dark .q-field--outlined.q-field--focused .q-field__control:after {
+  border-color: var(--tg-accent);
+}
+body.body--dark .q-table { background: transparent; color: var(--tg-fg); }
+body.body--dark .q-table thead tr { background: rgba(30, 41, 59, .55); }
+body.body--dark .q-table tbody tr:hover { background: rgba(22, 163, 74, .07); }
+body.body--dark .q-expansion-item {
+  border: 1px solid rgba(51, 65, 85, .6);
+  border-radius: 12px;
+  overflow: hidden;
+}
+body.body--dark .q-expansion-item:hover { border-color: rgba(34, 197, 94, .45); }
+body.body--dark .q-separator { background: var(--tg-border); }
+body.body--dark .q-item { color: var(--tg-fg); }
+body.body--dark .q-notification {
+  border: 1px solid var(--tg-border);
+  border-radius: 12px;
+}
+body.body--dark ::selection { background: rgba(34, 197, 94, .35); }
+*:focus-visible { outline: 2px solid var(--tg-ring); outline-offset: 2px; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: #0B1120; }
+::-webkit-scrollbar-thumb { background: #334155; border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: #475569; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+"""
+
+
+def apply_theme() -> None:
+    ui.dark_mode(True)
+    ui.colors(
+        primary="#16A34A",
+        secondary="#1E293B",
+        accent="#22C55E",
+        positive="#16A34A",
+        negative="#DC2626",
+        warning="#F59E0B",
+        info="#38BDF8",
+    )
+    ui.add_head_html(
+        '<link rel="preconnect" href="https://fonts.googleapis.com">'
+        '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
+        '<link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">'
+    )
+    ui.add_css(THEME_CSS)
+
+
 def pretty_json(data: Dict[str, object]) -> str:
     return json.dumps(data, ensure_ascii=False, indent=2)
+
+
+def format_record_time(value: str) -> str:
+    try:
+        return datetime.fromisoformat(str(value)).strftime("%H:%M:%S")
+    except ValueError:
+        return str(value)
+
+
+STATUS_LABELS = {
+    "success": "成功",
+    "partial": "部分失败",
+    "failed": "失败",
+    "unknown": "未知",
+}
+STATUS_COLORS = {
+    "success": "positive",
+    "partial": "warning",
+    "failed": "negative",
+    "unknown": "grey",
+}
 
 
 def notify_error(exc: Exception) -> None:
@@ -99,53 +234,105 @@ class BaseConfigBlock:
         self,
         kind: ConfigKind,
         template: Dict[str, object],
+        *,
+        on_change: Callable[[], None] = lambda: None,
     ):
         self.kind = kind
         self.template = template
+        self._on_change = on_change
         self.title = "签到配置 (signer)" if kind == "signer" else "监控配置 (monitor)"
         self.root_dir, self.cfg_cls = CONFIG_META[kind]
-        with ui.card().classes("w-full shadow-md"):
-            ui.label(self.title).classes("text-lg font-semibold")
-            ui.label(f"目录: {self.root_dir}/<name>/config.json").classes(
-                "text-sm text-gray-500"
-            )
-            with ui.row().classes("items-end w-full gap-3"):
-                self.select = ui.select(
-                    label="选择配置",
-                    options=[],
-                    with_input=True,
-                    on_change=self.load_current,
-                ).classes("min-w-[240px]")
-                ui.button("重置", on_click=self.clear_selection).props("outline")
-                self.name_input = ui.input(
-                    label="保存为/新建名称",
-                    placeholder="my_task",
-                ).classes("min-w-[200px]")
-                ui.button("使用示例", on_click=self.fill_template)
-                self.setup_toolbar()
+        with ui.card().classes("w-full"):
+            with ui.row().classes("w-full items-start justify-between gap-3"):
+                with ui.column().classes("gap-0"):
+                    ui.label(self.title).classes("text-lg font-semibold")
+                    ui.label(f"目录: {self.root_dir}/<name>/config.json").classes(
+                        "text-xs font-mono text-gray-500"
+                    )
+                ui.button(
+                    "刷新列表", icon="refresh", on_click=self.refresh_options
+                ).props("flat dense")
 
-            # MonitorConfig schema causes json_editor to fail rendering due to "format": "uri" etc.
-            # We need to clean the schema before passing it to the editor.
-            schema = TypeAdapter(self.cfg_cls | None).json_schema()
-            if self.kind == "monitor":
-                schema = clean_schema(schema)
+            with ui.row().classes(
+                "w-full gap-4 items-start flex-wrap lg:flex-nowrap mt-2"
+            ):
+                with ui.column().classes("w-full md:w-80 shrink-0 gap-3"):
+                    ui.label("已保存配置").classes(
+                        "text-xs font-semibold uppercase tracking-wider text-gray-500"
+                    )
+                    self.select = (
+                        ui.select(
+                            label="选择配置",
+                            options=[],
+                            with_input=True,
+                            on_change=self.load_current,
+                        )
+                        .classes("w-full")
+                        .props("outlined dense")
+                    )
+                    self.name_input = (
+                        ui.input(
+                            label="保存为/新建名称",
+                            placeholder="my_task",
+                        )
+                        .classes("w-full")
+                        .props("outlined dense")
+                    )
+                    with ui.row().classes("w-full gap-2"):
+                        ui.button(
+                            "加载", icon="download", on_click=self.load_current
+                        ).classes("grow")
+                        ui.button(
+                            "删除",
+                            icon="delete",
+                            color="negative",
+                            on_click=self.delete_current,
+                        ).props("outline").classes("grow")
 
-            def on_change(e):
-                self.editor.properties["content"] = e.content
+                with ui.column().classes("w-full grow min-w-0 gap-2"):
+                    with ui.row().classes(
+                        "w-full items-center justify-between gap-2 flex-wrap"
+                    ):
+                        with ui.row().classes("gap-2 items-center"):
+                            ui.button(
+                                "重置",
+                                icon="restart_alt",
+                                on_click=self.clear_selection,
+                            ).props("outline dense")
+                            ui.button(
+                                "使用示例",
+                                icon="auto_awesome",
+                                on_click=self.fill_template,
+                            ).props("outline dense")
+                            self.setup_toolbar()
+                        ui.button(
+                            "保存",
+                            icon="save",
+                            color="primary",
+                            on_click=self.save_current,
+                        ).props("dense")
 
-            self.editor = ui.json_editor(
-                {"content": {"json": None}},
-                schema=schema,
-                on_change=on_change,
-            )
-            self.selected_name: dict[str, str] = {"value": ""}
+                    # MonitorConfig schema causes json_editor to fail rendering due to "format": "uri" etc.
+                    # We need to clean the schema before passing it to the editor.
+                    schema = TypeAdapter(self.cfg_cls | None).json_schema()
+                    if self.kind == "monitor":
+                        schema = clean_schema(schema)
 
-            with ui.row().classes("gap-2 items-center"):
-                ui.button("刷新列表", on_click=self.refresh_options)
-                ui.button("加载", on_click=self.load_current)
-                ui.button("保存", color="primary", on_click=self.save_current)
-                ui.button("删除", color="negative", on_click=self.delete_current)
-            self.setup_footer()
+                    def on_change(e):
+                        self.editor.properties["content"] = e.content
+
+                    self.editor = ui.json_editor(
+                        {"content": {"json": None}},
+                        schema=schema,
+                        on_change=on_change,
+                    )
+                    self.editor.classes("jse-theme-dark w-full").style(
+                        "height: 460px; border-radius: 10px; overflow: hidden;"
+                    )
+                    self.selected_name: dict[str, str] = {"value": ""}
+
+                    with ui.row().classes("w-full items-center justify-between gap-2"):
+                        self.setup_footer()
 
     def clear_selection(self) -> None:
         self.select.value = None
@@ -204,6 +391,7 @@ class BaseConfigBlock:
             self.refresh_options()
             self.select.value = target
             self.select.update()
+            self._on_change()
             ui.notify("保存成功", type="positive")
         except Exception as exc:  # noqa: BLE001
             notify_error(exc)
@@ -225,6 +413,7 @@ class BaseConfigBlock:
             if self.select.value == target:
                 self.select.value = None
                 self.select.update()
+            self._on_change()
             ui.notify("已删除配置", type="positive")
         except Exception as exc:  # noqa: BLE001
             notify_error(exc)
@@ -236,22 +425,36 @@ class SignerBlock(BaseConfigBlock):
         template: Dict[str, object],
         *,
         goto_records: Callable[[str], None] = lambda _task: None,
+        on_change: Callable[[], None] = lambda: None,
     ):
         self.record_btn = None
         self.record_hint = None
         self._goto_records = goto_records
-        super().__init__("signer", template)
+        super().__init__("signer", template, on_change=on_change)
+
+    def select_task(self, target: str) -> None:
+        self.refresh_options()
+        self.select.value = target
+        self.select.update()
+        self.load_current()
 
     def setup_toolbar(self):
-        ui.button("交互式配置", on_click=self.open_interactive).props("outline")
+        ui.button("交互式配置", icon="tune", on_click=self.open_interactive).props(
+            "outline dense"
+        )
 
     def setup_footer(self):
         self.record_hint = ui.label("").classes("text-sm text-primary")
-        self.record_btn = ui.button(
-            "查看签到记录",
-            color="primary",
-            on_click=self.goto_records,
-        ).classes("min-w-[120px]")
+        self.record_btn = (
+            ui.button(
+                "查看签到记录",
+                icon="receipt_long",
+                color="primary",
+                on_click=self.goto_records,
+            )
+            .classes("min-w-[120px]")
+            .props("dense")
+        )
         self.record_btn.disable()
 
     def on_loaded(self, target: str):
@@ -275,6 +478,7 @@ class SignerBlock(BaseConfigBlock):
             # If the user saved a config with the same name as currently selected, reload it
             if self.select.value:
                 self.load_current()
+            self._on_change()
 
         initial_config = self.editor.properties["content"].get("json")
         initial_name = self.name_input.value or self.select.value or ""
@@ -286,6 +490,145 @@ class SignerBlock(BaseConfigBlock):
             initial_name=initial_name,
         )
         wizard.open()
+
+
+class SignerTaskOverviewBlock:
+    def __init__(
+        self,
+        goto_config: Callable[[str | None], None],
+        goto_records: Callable[[str], None],
+    ):
+        self._goto_config = goto_config
+        self._goto_records = goto_records
+        with ui.card().classes("w-full"):
+            with ui.row().classes("w-full items-start justify-between gap-3"):
+                with ui.column().classes("gap-0"):
+                    ui.label("签到任务").classes("text-lg font-semibold")
+                    ui.label("已配置任务的签到时间、目标聊天和最近签到记录。").classes(
+                        "text-sm text-gray-500"
+                    )
+                ui.button("刷新", on_click=self.refresh).props("outline")
+            self.body = ui.column().classes("w-full gap-2 mt-2")
+        self.refresh()
+
+    @staticmethod
+    def _latest_record(records) -> tuple[str, str] | None:
+        latest = None
+        for record in records:
+            for date, time in record.records:
+                key = (date, time)
+                if latest is None or key > latest:
+                    latest = key
+        return latest
+
+    @staticmethod
+    def _action_summary(action) -> str:
+        detail = getattr(action, "text", None) or getattr(action, "dice", None) or ""
+        return f"{action.action.desc}: {detail}" if detail else action.action.desc
+
+    def refresh(self) -> None:
+        self.body.clear()
+        tasks = list_task_names("signer", state.workdir)
+        records_by_task: dict[str, list] = {}
+        for record in load_sign_records(state.workdir):
+            records_by_task.setdefault(record.task, []).append(record)
+
+        with self.body:
+            if not tasks:
+                with ui.column().classes("items-start gap-2 py-4"):
+                    ui.label("还没有签到任务").classes("text-base font-medium")
+                    ui.label(
+                        "点击下方按钮创建第一个任务，或到「配置管理 → Signer」手动编辑 JSON。"
+                    ).classes("text-sm text-gray-500")
+                    ui.button(
+                        "创建任务",
+                        color="primary",
+                        on_click=lambda: self._goto_config(None),
+                    )
+                return
+
+            for name in tasks:
+                try:
+                    entry = load_config("signer", name, state.workdir)
+                except Exception as exc:  # noqa: BLE001
+                    with ui.row().classes("w-full items-center gap-2"):
+                        ui.icon("error", color="negative")
+                        ui.label(f"{name}: {exc}").classes("text-sm text-negative")
+                    continue
+
+                cfg = entry.cfg
+                chats = cfg.chats
+                latest = self._latest_record(records_by_task.get(name, []))
+                targets = "、".join(str(chat.chat_id) for chat in chats)
+                with ui.expansion(icon="task_alt").classes("w-full") as expansion:
+                    with expansion.add_slot("header"):
+                        with ui.row().classes(
+                            "w-full items-center justify-between gap-3 pr-2"
+                        ):
+                            with ui.column().classes("gap-0"):
+                                ui.label(name).classes("font-mono font-semibold")
+                                ui.label(f"{len(chats)} 个目标 · {targets}").classes(
+                                    "text-xs text-gray-500"
+                                )
+                            with ui.column().classes("items-end gap-0"):
+                                ui.label(cfg.sign_at).classes("font-mono text-sm")
+                                ui.label(
+                                    f"最近签到: {latest[0]} "
+                                    f"{format_record_time(latest[1])}"
+                                    if latest
+                                    else "尚无签到记录"
+                                ).classes("text-xs text-gray-500")
+                    with ui.column().classes("w-full gap-3 pt-2"):
+                        rows = [
+                            {
+                                "目标": str(chat.chat_id),
+                                "备注": chat.name or "",
+                                "动作": " → ".join(
+                                    self._action_summary(action)
+                                    for action in chat.actions
+                                ),
+                            }
+                            for chat in chats
+                        ]
+                        ui.table(
+                            columns=[
+                                {
+                                    "name": "目标",
+                                    "label": "目标",
+                                    "field": "目标",
+                                    "align": "left",
+                                },
+                                {
+                                    "name": "备注",
+                                    "label": "备注",
+                                    "field": "备注",
+                                    "align": "left",
+                                },
+                                {
+                                    "name": "动作",
+                                    "label": "动作",
+                                    "field": "动作",
+                                    "align": "left",
+                                },
+                            ],
+                            rows=rows,
+                        ).classes("w-full").props("flat dense")
+                        if cfg.random_seconds:
+                            ui.label(f"随机误差: ±{cfg.random_seconds} 秒").classes(
+                                "text-xs text-gray-500"
+                            )
+                        with ui.row().classes("gap-2"):
+                            ui.button(
+                                "编辑配置",
+                                on_click=lambda e=None, n=name: self._goto_config(n),
+                            ).props("outline")
+                            ui.button(
+                                "查看记录",
+                                on_click=lambda e=None, n=name: self._goto_records(n),
+                            ).props("flat")
+
+    def __call__(self, *args, **kwargs):
+        return self.refresh()
 
 
 class MonitorBlock(BaseConfigBlock):
@@ -369,59 +712,162 @@ def user_info_block() -> Callable[[], None]:
 
 class SignRecordBlock:
     def __init__(self):
-        self.container = ui.column().classes("w-full gap-3")
-        with ui.row().classes("items-end gap-3"):
-            self.filter_input = ui.input(
-                label="筛选任务/用户",
-                placeholder="输入任务名或用户ID过滤",
-                value=state.record_filter,
-                on_change=lambda e: self._update_filter(e.value),
-            ).classes("w-full")
-            ui.button("清除筛选", on_click=lambda: self._update_filter("")).props(
-                "outline"
-            )
-        self.status = ui.label("").classes("text-sm text-gray-500")
+        with ui.card().classes("w-full"):
+            with ui.row().classes("w-full items-start justify-between gap-3"):
+                with ui.column().classes("gap-0"):
+                    ui.label("签到记录").classes("text-lg font-semibold")
+                    ui.label("优先读取 SQLite，兼容旧 sign_record.json。").classes(
+                        "text-sm text-gray-500"
+                    )
+                ui.button("刷新", icon="refresh", on_click=self.refresh).props(
+                    "outline dense"
+                )
+
+            self.stats = ui.row().classes("w-full gap-3 flex-wrap mt-2")
+
+            with ui.row().classes("w-full items-end gap-3 mt-2"):
+                self.filter_input = (
+                    ui.input(
+                        label="筛选任务/用户",
+                        placeholder="输入任务名或用户ID过滤",
+                        value=state.record_filter,
+                        on_change=lambda e: self._update_filter(e.value),
+                    )
+                    .classes("w-full")
+                    .props("outlined dense clearable")
+                )
+                ui.button(
+                    "清除筛选",
+                    icon="filter_alt_off",
+                    on_click=lambda: self._update_filter(""),
+                ).props("outline dense")
+            self.status = ui.label("").classes("text-xs text-gray-500")
+            self.container = ui.column().classes("w-full gap-2 mt-1")
 
     def _update_filter(self, value: str) -> None:
         state.record_filter = value or ""
         self.refresh()
 
+    @staticmethod
+    def _stat(label: str, value: str, icon: str) -> None:
+        with ui.card().classes("grow min-w-[150px] px-4 py-3"):
+            with ui.row().classes("items-center gap-3 no-wrap"):
+                ui.icon(icon).classes("text-2xl text-primary")
+                with ui.column().classes("gap-0"):
+                    ui.label(value).classes("text-lg font-semibold font-mono")
+                    ui.label(label).classes("text-xs text-gray-500")
+
     def refresh(
         self,
     ) -> None:
+        self.stats.clear()
         self.container.clear()
-        records = load_sign_records(state.workdir)
+        all_records = load_sign_records(state.workdir)
         keyword = (state.record_filter or "").lower().strip()
+        records = all_records
         if keyword:
             records = [
                 r
-                for r in records
+                for r in all_records
                 if keyword in r.task.lower()
                 or (r.user_id and keyword in str(r.user_id).lower())
             ]
+
+        total_entries = sum(len(r.records) for r in all_records)
+        latest_date = max(
+            (date for r in all_records for date, _ in r.records),
+            default="—",
+        )
+        with self.stats:
+            self._stat("记录组", str(len(all_records)), "folder_open")
+            self._stat("记录条数", str(total_entries), "event_available")
+            self._stat("最近签到", latest_date, "schedule")
+
         with self.container:
             if not records:
-                self.status.text = "未找到匹配的签到记录" if keyword else "尚无签到记录"
+                with ui.column().classes("w-full items-center gap-2 py-8"):
+                    ui.icon("inbox").classes("text-4xl text-gray-500")
+                    ui.label(
+                        "未找到匹配的签到记录" if keyword else "尚无签到记录"
+                    ).classes("text-base font-medium")
+                    ui.label("执行一次签到任务后，记录会显示在这里。").classes(
+                        "text-sm text-gray-500"
+                    )
+                self.status.text = ""
                 self.status.update()
                 return
-            self.status.text = f"共 {len(records)} 组记录"
+
+            self.status.text = f"显示 {len(records)} 组记录"
             self.status.update()
             for record in records:
                 user_text = record.user_id or "默认"
-                header = f"{record.task} / {user_text}（{len(record.records)}条）"
-                with ui.expansion(header, icon="event").classes("shadow-sm"):
-                    ui.label(f"来源: {record.path}").classes("text-gray-500")
-                    if not record.records:
-                        ui.label("暂无记录").classes("text-gray-500")
-                        continue
-                    rows = [{"日期": k, "时间": v} for k, v in record.records]
-                    ui.table(
-                        columns=[
-                            {"name": "日期", "label": "日期", "field": "日期"},
-                            {"name": "时间", "label": "时间", "field": "时间"},
-                        ],
-                        rows=rows,
-                    ).classes("w-full").props("flat dense")
+                latest = max(record.records, default=None)
+                latest_status = (
+                    record.statuses.get(latest[0], "unknown") if latest else "unknown"
+                )
+                with ui.expansion(icon="event_note").classes("w-full") as expansion:
+                    with expansion.add_slot("header"):
+                        with ui.row().classes(
+                            "w-full items-center justify-between gap-3 pr-2"
+                        ):
+                            with ui.column().classes("gap-0"):
+                                ui.label(record.task).classes("font-mono font-semibold")
+                                ui.label(f"用户 {user_text}").classes(
+                                    "text-xs text-gray-500"
+                                )
+                            with ui.row().classes("items-center gap-2"):
+                                ui.badge(
+                                    f"{len(record.records)} 条", color="primary"
+                                ).props("outline rounded")
+                                ui.badge(
+                                    STATUS_LABELS.get(latest_status, "未知"),
+                                    color=STATUS_COLORS.get(latest_status, "grey"),
+                                ).props("rounded")
+                                ui.label(
+                                    f"{latest[0]} {format_record_time(latest[1])}"
+                                    if latest
+                                    else "暂无记录"
+                                ).classes("text-xs text-gray-500")
+                    with ui.column().classes("w-full gap-2 pt-2"):
+                        ui.label(f"来源: {record.path}").classes(
+                            "text-xs font-mono text-gray-500"
+                        )
+                        if not record.records:
+                            ui.label("暂无记录").classes("text-sm text-gray-500")
+                            continue
+                        rows = [
+                            {
+                                "日期": k,
+                                "时间": format_record_time(v),
+                                "状态": STATUS_LABELS.get(
+                                    record.statuses.get(k, "unknown"), "未知"
+                                ),
+                            }
+                            for k, v in sorted(record.records, reverse=True)
+                        ]
+                        ui.table(
+                            columns=[
+                                {
+                                    "name": "日期",
+                                    "label": "日期",
+                                    "field": "日期",
+                                    "align": "left",
+                                },
+                                {
+                                    "name": "时间",
+                                    "label": "时间",
+                                    "field": "时间",
+                                    "align": "left",
+                                },
+                                {
+                                    "name": "状态",
+                                    "label": "状态",
+                                    "field": "状态",
+                                    "align": "left",
+                                },
+                            ],
+                            rows=rows,
+                        ).classes("w-full").props("flat dense")
 
     def __call__(self, *args, **kwargs):
         return self.refresh()
@@ -551,11 +997,20 @@ def _apply_paths(workdir_input, on_refresh: Callable[[], None]) -> None:
 
 def _build_dashboard(container) -> None:
     with container:
-        ui.label("TG Signer Web 控制台").classes(
-            "text-2xl font-semibold tracking-wide mb-2"
-        )
+        with ui.row().classes("w-full items-end justify-between gap-3 mb-1"):
+            with ui.column().classes("gap-0"):
+                ui.label("TG Signer").classes(
+                    "text-3xl font-bold tracking-tight font-mono"
+                )
+                ui.label("Telegram 自动化控制台 · 签到 / 监控 / 规则").classes(
+                    "text-sm text-gray-500"
+                )
+            ui.badge("LOCAL", color="primary").props("outline rounded").classes(
+                "text-xs"
+            )
         refreshers: list[Callable[[], None]] = []
         refresh_records: "SignRecordBlock"
+        signer_block = None
 
         def refresh_all() -> None:
             for refresh in refreshers:
@@ -564,6 +1019,7 @@ def _build_dashboard(container) -> None:
         top_controls(refresh_all)
 
         with ui.tabs().classes("w-full") as tabs:
+            tab_overview = ui.tab("签到任务")
             tab_configs = ui.tab("配置管理")
             tab_users = ui.tab("用户信息")
             tab_records = ui.tab("签到记录")
@@ -574,7 +1030,26 @@ def _build_dashboard(container) -> None:
             tabs.update()
             refresh_records.filter_input.set_value(task_name)
 
-        with ui.tab_panels(tabs, value=tab_configs).classes("w-full"):
+        def goto_config(task_name: str | None) -> None:
+            tabs.value = tab_configs
+            tabs.update()
+            sub_tabs.value = tab_signer
+            sub_tabs.update()
+            if signer_block is None:
+                return
+            if task_name:
+                signer_block.select_task(task_name)
+            else:
+                signer_block.clear_selection()
+
+        with ui.tab_panels(tabs, value=tab_overview).classes("w-full"):
+            with ui.tab_panel(tab_overview):
+                overview_block = SignerTaskOverviewBlock(
+                    goto_config=goto_config,
+                    goto_records=goto_records,
+                )
+                refreshers.append(overview_block)
+
             with ui.tab_panel(tab_configs):
                 ui.label(
                     "管理 signer 和 monitor 的配置文件，支持查看、编辑和删除。"
@@ -584,9 +1059,12 @@ def _build_dashboard(container) -> None:
                     tab_monitor = ui.tab("Monitor")
                 with ui.tab_panels(sub_tabs, value=tab_signer).classes("w-full"):
                     with ui.tab_panel(tab_signer):
-                        refreshers.append(
-                            SignerBlock(SIGNER_TEMPLATE, goto_records=goto_records)
+                        signer_block = SignerBlock(
+                            SIGNER_TEMPLATE,
+                            goto_records=goto_records,
+                            on_change=overview_block.refresh,
                         )
+                        refreshers.append(signer_block)
                     with ui.tab_panel(tab_monitor):
                         refreshers.append(MonitorBlock(MONITOR_TEMPLATE))
 
@@ -613,7 +1091,7 @@ def _build_dashboard(container) -> None:
 def _auth_gate(container, auth_code: str, on_success: Callable[[], None]) -> None:
     with container:
         ui.label("TG Signer Web 控制台").classes(
-            "text-2xl font-semibold tracking-wide mb-2"
+            "text-2xl font-semibold tracking-wide mb-2 font-mono"
         )
         ui.label("已启用访问控制，请输入 Auth Code 继续使用 Web 控制台。").classes(
             "text-gray-600"
@@ -658,7 +1136,8 @@ def _auth_gate(container, auth_code: str, on_success: Callable[[], None]) -> Non
 
 def build_ui(auth_code: str = None) -> None:
     ui.page_title("TG Signer Web 控制台")
-    root = ui.column().classes("w-full gap-3")
+    apply_theme()
+    root = ui.column().classes("w-full gap-4")
 
     def render_dashboard() -> None:
         root.clear()

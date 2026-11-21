@@ -32,11 +32,19 @@ pip install "tg-signer[speedup]"
 ```sh
 pip install "tg-signer[yaml]"
 ```
+
+启用二维码登录：
+
+```sh
+pip install "tg-signer[qr]"
+```
 #### WebUI
 tg-signer附带了一个WebUI，安装命令:
 ```sh
 pip install "tg-signer[gui]"
 ```
+
+WebUI 提供签到任务总览（目标聊天、签到时间、最近签到记录）、签到/监控配置编辑、签到记录查询（含成功/失败状态）和日志查看。
 
 ![webgui](./assets/webui.jpeg)
 
@@ -86,7 +94,7 @@ Commands:
   list                    列出已有配置
   list-members            查询聊天（群或频道）的成员, 频道需要管理员权限
   list-folders            列出 Telegram 普通对话 Folder
-  list-sign-records       列出最近N条签到记录
+  list-sign-records       列出最近N条签到记录（含成功/失败状态）
   list-topics             列出群组话题ID（message_thread_id）
   list-schedule-messages  显示已配置的定时消息
   llm-config              配置大模型API
@@ -115,6 +123,7 @@ tg-signer run my_sign  # 不询问，直接运行'my_sign'任务
 tg-signer run-once my_sign  # 直接运行一次'my_sign'任务
 tg-signer list-folders  # 列出 Telegram 普通 Folder 的 ID、名称和显式对话数量
 tg-signer login --from-folder Sign  # 登录账号并从 Sign Folder 发现对话
+tg-signer login --qr  # 使用二维码登录
 tg-signer run --from-folder Sign my_sign  # 从 Sign Folder 发现对话后运行任务
 tg-signer list-sign-records linuxdo -n 5  # 查看任务 linuxdo 最近 5 条签到记录
 tg-signer migrate-sign-records  # 将.signer/signs 下的签到记录迁移到 SQLite
@@ -165,6 +174,14 @@ tg-signer login
 根据提示输入手机号码和验证码进行登录并获取最近的聊天列表，确保你想要签到的聊天在列表内。
 签到任务里的`chat_id`同时支持整数ID和以`@`开头的username，例如`@neo`。
 对于论坛群组，登录输出中会额外打印每个话题的 `message_thread_id`，可直接用于 `--message-thread-id`。
+
+如果不想输入手机号和验证码，可以安装 `tg-signer[qr]` 后使用二维码登录：
+
+```sh
+tg-signer login --qr
+```
+
+终端会显示二维码（约 30 秒刷新一次），在手机 Telegram 的「设置 → 隐私和安全 → 已登录设备 → 扫描二维码」中扫码即可完成授权。扫码登录同样会获取最近的聊天列表，也支持 `--from-folder`。
 
 如果目标对话不在最近列表中，可以在 Telegram 新建一个普通 Folder，手动把目标对话加入其中，然后按名称或 ID 加载：
 
@@ -489,3 +506,13 @@ tg-signer monitor run my_monitor
 迁移到 SQLite 后，新的签到记录只写入 `data.sqlite3`，但仍兼容读取旧
 `sign_record.json`。当运行任务时如果检测到旧 JSON，程序会输出提示并尝试将该任务
 的历史记录自动导入 SQLite。
+
+每条签到记录还包含状态字段 `status`：
+
+- `success`：所有目标聊天都发送成功
+- `partial`：部分目标失败
+- `failed`：所有目标都失败
+- `unknown`：迁移前的历史记录或从旧 JSON 导入的记录
+
+状态会显示在 `list-sign-records` 的输出和 WebUI 的「签到记录」页面中。
+状态只反映 Telegram 发送/动作流程是否报错；机器人回复“今天已签过”等业务结果仍算发送成功。
